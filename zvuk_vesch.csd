@@ -26,6 +26,20 @@ gaSpatialOut[] init 8
 giDurArr[] fillarray 1, 2, 3, 4, 6, 8, 12, 16, 24, 32
 giDurMin init .25
 
+chn_a "fftA", 2
+chn_a "fftB", 2
+
+gS_path1 = "C:\\home\\chernenko\\src\\csound\\dev2\\csound\\dev_stohastic\\soundin."
+gS_filename_arr[] init 4
+gS_filename_arr[0] = strcatk(gS_path1, "1")
+gS_filename_arr[1] = strcatk(gS_path1, "2")
+gS_filename_arr[2] = strcatk(gS_path1, "3")
+gS_filename_arr[3] = strcatk(gS_path1, "4")
+
+giSampleOffset[] fillarray 3, 0.5, 0, .33
+giSampleSpeed[] fillarray .05, .1, .1, .1
+giSampleGain[] fillarray  2, 3, 20, 1
+giSampleVolAfterComp[] fillarray  2, 3, 2.5, 1
 
 /*
 D:\src\csound\edu\sa\csound_edu\lsn10\cl_solo_am.wav S
@@ -124,6 +138,43 @@ instr convolve_my
 endin
 */
 
+instr fft_global
+    aInA chnget "fftA"
+    aInB chnget "fftB" 
+    
+    gifftsiz  =         pow(2, 10)//1024
+    gioverlap =         gifftsiz/2//256
+    giwintyp  =         1 ;von hann window
+    
+    fSigAL      pvsanal   aInA, gifftsiz, gioverlap, gifftsiz*2, giwintyp
+    fSigBL      pvsanal   aInB, gifftsiz, gioverlap, gifftsiz*2, giwintyp
+    fSigALScale = pvscale(fSigAL, expseg:k(.2, p3, 2.))
+    fSigBLScale = pvscale(fSigBL, expseg:k(2., p3, .2))
+    //fMod = pvsfilter(fSigALScale, fSigBLScale, oscili:k(0.49, .5) + .5)
+    //fMod = pvscross(fSigALScale, fSigBLScale, oscili:k(0.49, .5, -1) + .5, oscili:k(0.49, .5, -1, .5) + .5)
+    fMod = pvsvoc(fSigAL, fSigBL, 1, 1)
+    aOut pvsynth fMod
+    
+    kthreshold = 0.3
+    icomp1 = .1
+    icomp2 = 2
+    irtime = 0.01
+    iftime = 0.5
+    aOut dam aOut, kthreshold, icomp1, icomp2, irtime, iftime
+    aOut = aOut * 5
+    
+    
+    aOut butterhp aOut, 50
+    
+    aOut  = limit(aOut, -0.99, .99)
+    
+    //spatial_my(aIn[0])
+    outs aOut, aOut
+    
+    chnclear "fftA"
+    chnclear "fftB"
+endin
+
 instr fft_my
     //S_sample_file_nameA = "C:\\home\\chernenko\\audio\\cons\\env\\reaper_stems_bbc.wav"
     S_sample_file_nameA = "D:\\src\\csound\\dev2\\csound\\dev_stohastic\\soundin.1"
@@ -150,6 +201,8 @@ instr fft_my
     //fMod = pvscross(fSigALScale, fSigBLScale, oscili:k(0.49, .5, -1) + .5, oscili:k(0.49, .5, -1, .5) + .5)
     fMod = pvsvoc(fSigAL, fSigBL, 1, 1)
     aIn[0] pvsynth fMod
+    
+    
     kthreshold = 0.6
     icomp1 = .2
     icomp2 = 2
@@ -158,6 +211,7 @@ instr fft_my
     aIn[0] dam aIn[0], kthreshold, icomp1, icomp2, irtime, iftime
     aIn[0] = aIn[0] * 5
     //spatial_my(aIn[0])
+    
     outs aIn[0], aIn[0]
 endin
 
@@ -250,7 +304,7 @@ instr part
 endin 
 
 
-instr part_str
+instr part_sample
     /*
     kDur init .5
     kFileA init 1
@@ -308,12 +362,76 @@ instr part_str
         iCnt = iCnt+1
     od
     */
+    kDur init 10
+    kFlag init 1
+    
+    if kFlag==1 then
+        S_path = "C:\\home\\chernenko\\src\\csound\\dev2\\csound\\dev_stohastic\\"
+        kFlag = 0
+    endif
+    
+    kTrig metro 1/kDur
+    
+    if kTrig==1 then
+        //S_filename = S_path + "\\soundin.1"
+        //gS_filename strcatk S_path, "soundin.1"
+        kSampleIndx = floor(random:k(0, 3.5))
+        //printk 0, kSampleIndx
+        kTranspose = random:k(.8, 2)
+        event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0.5, 1, 0, kTranspose
+        
+        kSampleIndx = floor(random:k(0, 3.5))
+        event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0, 1, 1, 1
+        
+        kDur = random:k(8., 20)
+    endif
 endin
 
 
 instr play_sample
-    asig[] diskin p4, 1, 0, 1 
-    outs asig[0]*.8, asig[0]*.8
+    //asig[] diskin gS_filename, .05, 3, 1
+    iSampleIndx = p4
+    iSendMain = p5
+    iSendFft = p6
+    iFftChn = p7
+    iTranspose = p8
+    asig[] diskin gS_filename_arr[iSampleIndx], giSampleSpeed[iSampleIndx]*iTranspose, giSampleOffset[iSampleIndx], 1
+    kEnvAmp adsr 2, 0, 1, 0.5
+    
+    asig[0] = asig[0] * giSampleGain[iSampleIndx]
+    /*
+    kthreshold = 0.6
+    icomp1 = .2
+    icomp2 = 2
+    irtime = 0.01
+    iftime = 0.5
+    asig[0] dam asig[0], kthreshold, icomp1, icomp2, irtime, iftime
+    
+    asig[0] = asig[0] * 2
+    */
+    
+    kthresh = 0
+    kloknee = 60
+    khiknee = 80
+    kratio  = 4
+    katt    = 0.1
+    krel    = .5
+    ilook   = .02
+    asig[0]  compress asig[0], asig[0], kthresh, kloknee, khiknee, kratio, katt, krel, ilook
+    asig[0] = asig[0] * giSampleVolAfterComp[iSampleIndx]
+    
+    
+    asig[0] butterhp asig[0], 50
+    
+    asig[0]  = limit(asig[0], -0.99, .99) 
+    
+    outs asig[0]*kEnvAmp*iSendMain, asig[0]*kEnvAmp*iSendMain
+    
+    if iFftChn==0 then
+        chnset asig[0]*kEnvAmp*iSendFft, "fftA"
+    else
+        chnset asig[0]*kEnvAmp*iSendFft, "fftB"
+    endif
 endin
 
 </CsInstruments>
@@ -330,9 +448,10 @@ i "SubstrPoly" 6 . .2 220
 //i "fft_my" 0 20
 //i "part" 0 120 "SubstrPoly"
 
-i "part_str" 0 10
-i "limiter" 0 20
+i "part_sample" 0 240
+i "fft_global" 0 240
+i "limiter" 0 240
 //i "dump_file" 0 20
-i "master_out" 0 120
+i "master_out" 0 240
 </CsScore>
 </CsoundSynthesizer>
