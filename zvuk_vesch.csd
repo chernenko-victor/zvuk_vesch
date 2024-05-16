@@ -28,18 +28,32 @@ giDurMin init .25
 
 chn_a "fftA", 2
 chn_a "fftB", 2
+chn_k "FftModType", 2
+
 
 gS_path1 = "C:\\home\\chernenko\\src\\csound\\dev2\\csound\\dev_stohastic\\soundin."
-gS_filename_arr[] init 4
+gS_filename_arr[] init 14
 gS_filename_arr[0] = strcatk(gS_path1, "1")
 gS_filename_arr[1] = strcatk(gS_path1, "2")
 gS_filename_arr[2] = strcatk(gS_path1, "3")
 gS_filename_arr[3] = strcatk(gS_path1, "4")
+gS_filename_arr[4] = strcatk(gS_path1, "10")
+gS_filename_arr[5] = strcatk(gS_path1, "14")
+gS_filename_arr[6] = strcatk(gS_path1, "14")
 
-giSampleOffset[] fillarray 3, 0.5, 0, .33
-giSampleSpeed[] fillarray .05, .1, .1, .1
-giSampleGain[] fillarray  2, 3, 20, 1
-giSampleVolAfterComp[] fillarray  2, 3, 2.5, 1
+gS_filename_arr[7] = strcatk(gS_path1, "5")
+gS_filename_arr[8] = strcatk(gS_path1, "7")
+gS_filename_arr[9] = strcatk(gS_path1, "15")
+gS_filename_arr[10] = strcatk(gS_path1, "14")
+gS_filename_arr[11] = strcatk(gS_path1, "21")
+gS_filename_arr[12] = strcatk(gS_path1, "22")
+gS_filename_arr[13] = strcatk(gS_path1, "23")
+
+
+giSampleOffset[] fillarray 3, 0.5, 0, .33, 2, 3.4, 4.4,         0, 0, 0, 0, 0, 0, 0
+giSampleSpeed[] fillarray .05, .1, .1, .1, .1, .1, .1,          1, 1, 1, 1, 1, 1, 1
+giSampleGain[] fillarray  2, 3, 20, 1, 1, 2, 2,                 1, 1, 1, 1, 1, 1, 1
+giSampleVolAfterComp[] fillarray  2, 3, 2.5, 1, 6, 1, 1,        .5, 1, .5, .5, .5, .5, .5
 
 /*
 D:\src\csound\edu\sa\csound_edu\lsn10\cl_solo_am.wav S
@@ -139,8 +153,20 @@ endin
 */
 
 instr fft_global
+    /*
+    iModType
+    0   pvsfilter drone
+    1   pvscross light
+    2   pvscross harshy
+    3   pvsvoc no scale
+    4   pvsvoc scale
+    */
+
     aInA chnget "fftA"
     aInB chnget "fftB" 
+    kFftModType chnget "FftModType"
+    //kFftModType = 4
+    printk 1, kFftModType
     
     gifftsiz  =         pow(2, 10)//1024
     gioverlap =         gifftsiz/2//256
@@ -150,9 +176,22 @@ instr fft_global
     fSigBL      pvsanal   aInB, gifftsiz, gioverlap, gifftsiz*2, giwintyp
     fSigALScale = pvscale(fSigAL, expseg:k(.2, p3, 2.))
     fSigBLScale = pvscale(fSigBL, expseg:k(2., p3, .2))
-    //fMod = pvsfilter(fSigALScale, fSigBLScale, oscili:k(0.49, .5) + .5)
-    //fMod = pvscross(fSigALScale, fSigBLScale, oscili:k(0.49, .5, -1) + .5, oscili:k(0.49, .5, -1, .5) + .5)
-    fMod = pvsvoc(fSigAL, fSigBL, 1, 1)
+    
+    
+    if kFftModType==0 then
+        //fMod = pvsfilter(fSigALScale, fSigBLScale, oscili:k(0.49, .5) + .5)
+        fMod = pvsfilter(fSigAL, fSigBL, rspline:k(0.9, .2, .5, 2) ) //drone
+    elseif kFftModType==1 then
+        //fMod = pvscross(fSigALScale, fSigBLScale, oscili:k(0.49, .5, -1) + .5, oscili:k(0.49, .5, -1, .5) + .5) //light
+        fMod = pvscross(fSigAL, fSigBLScale, oscili:k(0.49, .5, -1) + .5, oscili:k(0.49, .5, -1, .5) + .5) //light more interesting
+    elseif kFftModType==2 then
+        fMod = pvscross(fSigAL, fSigBL, rspline:k(0.9, .2, .5, 2), rspline:k(0.9, .2, .5, 2)) //harshy
+    elseif kFftModType==3 then
+        fMod = pvsvoc(fSigAL, fSigBL, 1, 1) //good
+    else
+        fMod = pvsvoc(fSigAL, fSigBLScale, 1, 1) // Scale with no scale - good
+    endif
+    
     aOut pvsynth fMod
     
     kthreshold = 0.3
@@ -364,6 +403,8 @@ instr part_sample
     */
     kDur init 10
     kFlag init 1
+    kFftModType init 0
+    chnset kFftModType, "FftModType"
     
     if kFlag==1 then
         S_path = "C:\\home\\chernenko\\src\\csound\\dev2\\csound\\dev_stohastic\\"
@@ -375,13 +416,29 @@ instr part_sample
     if kTrig==1 then
         //S_filename = S_path + "\\soundin.1"
         //gS_filename strcatk S_path, "soundin.1"
-        kSampleIndx = floor(random:k(0, 3.5))
-        //printk 0, kSampleIndx
-        kTranspose = random:k(.8, 2)
-        event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0.5, 1, 0, kTranspose
         
-        kSampleIndx = floor(random:k(0, 3.5))
-        event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0, 1, 1, 1
+        kSampleIndx = floor(random:k(0, 6.5))
+        //kSampleIndx = floor(random:k(7, 13.5))
+        //printk 0, kSampleIndx
+        //kSampleIndx = 13
+        kSendMain = 0
+        kSendFft = 1
+        kFftChn = 0
+        kTranspose = 1
+        
+        kTranspose = random:k(.8, 2)
+        //event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0.5, 1, 0, kTranspose
+        
+        event "i", "play_sample", 0,  kDur*.8, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
+        
+        //kSampleIndx = floor(random:k(0, 6.5))
+        kSampleIndx = floor(random:k(7, 13.5))
+        kSendMain = 0
+        kSendFft = 1
+        kFftChn = 1
+        kTranspose = 1
+        //event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0, 1, 1, 1
+        event "i", "play_sample", 0,  kDur*.8, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
         
         kDur = random:k(8., 20)
     endif
