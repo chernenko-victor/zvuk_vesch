@@ -55,6 +55,10 @@ giSampleSpeed[] fillarray .05, .1, .1, .1, .1, .1, .1,          1, 1, 1, 1, 1, 1
 giSampleGain[] fillarray  2, 3, 20, 1, 1, 2, 2,                 1, 1, 1, 1, 1, 1, 1
 giSampleVolAfterComp[] fillarray  2, 3, 2.5, 1, 6, 1, 1,        .5, 1, .5, .5, .5, .5, .5
 
+
+giMaxDur = 60.
+giMinDur = .2
+
 /*
 D:\src\csound\edu\sa\csound_edu\lsn10\cl_solo_am.wav S
 D:\src\csound\edu\sa\csound_edu\lsn9\loop.wav S
@@ -67,6 +71,10 @@ D:\src\csound\edu\sa\2022_23\lsn8\ClassGuit.wav M
 D:\src\csound\edu\sa\2022_23\lsn8\339324__inspectorj__stream-water-c-mono.wav M
 D:\\tmp\\__music\\sample\\edu\\68444__pinkyfinger__piano-eb.wav ?
 */
+
+seed 0
+
+//opcode exp_scale
 
 opcode spatial_my, 0, a
     aIn xin 
@@ -137,24 +145,9 @@ instr SubstrPoly
     spatial_my(aMono)
 endin
 
-/*
-instr convolve_my
-    S_sample_file_name = "C:\\home\\chernenko\\audio\\cons\\env\\reaper_stems_bbc.wav"
-    //S_file_name = "D:\\src\\csound\\edu\\sa\\csound_edu\\lsn10\\cl_solo_am.wav"
-    S_impls_file_name = "D:\\src\\csound\\edu\\sa\\csound_edu\\lsn9\\dish.wav" 
-    aIn[] diskin S_sample_file_name
-    //iLenArr = lenarray(aIn)
-    //print(iLenArr)
-    //aConv[] pconvolve aIn[0], "D:\\src\\csound\\edu\\sa\\csound_edu\\lsn9\\dish.wav"
-    ipartitionsize  =     256
-    aconv[]           pconvolve aIn[0], "D:\\src\\csound\\edu\\sa\\csound_edu\\lsn9\\dish.wav", ipartitionsize
-    //spatial_my(aConv[0])
-endin
-*/
-
 instr fft_global
     /*
-    iModType
+    kModType
     0   pvsfilter drone
     1   pvscross light
     2   pvscross harshy
@@ -166,7 +159,7 @@ instr fft_global
     aInB chnget "fftB" 
     kFftModType chnget "FftModType"
     //kFftModType = 4
-    printk 1, kFftModType
+    //printk 1, kFftModType
     
     gifftsiz  =         pow(2, 10)//1024
     gioverlap =         gifftsiz/2//256
@@ -343,77 +336,119 @@ instr part
 endin 
 
 
+/*
+== Temporythm == ++
+
+tempo +
+porto +
+pauses +
+
+===============================================================================
+                    tempo          porto               pauses
+===============================================================================             
+1   short slow      low            low                 frequently--middle, long
+2   long  slow      low            long                middle--rare, short
+3   short fast      high           low                 rare, short
+===============================================================================
+*/
+
+/*
+== Transpose == 
+
+narrow
+wide
+*/
+
+/*
+== Samples == 
+
+dry low
+dry normal
+
+dry + fft(low, normal)
+dry + fft(normal, low)
+
+fft(low, normal)
+fft(normal, low)
+*/
+
+/*
+== FFt mode type ==
+(kModType)
+
+    0   pvsfilter drone
+    1   pvscross light
+    2   pvscross harshy
+    3   pvsvoc no scale
+    4   pvsvoc scale    
+*/
+
+
+//===================================================
+//===============       process     =================
+//===================================================
+/*
+random
+periodical
+part-lenght
+*/
+
+/*
+static
+slow
+fast
+momentary
+*/
+
+
+/*
+== Spatial ==
+concentred
+wider
+widest
+*/
+
 instr part_sample
-    /*
-    kDur init .5
-    kFileA init 1
-    kFileB init 1
-    kCnt init 0
-    kFlag init 1
-    iNumberOfFiles init 0
-    
-    if kFlag==1 then
-        S_path = "D:\\src\\csound\\dev2\\csound\\dev_stohastic"
-        SFilenames[] init 30
-        SFilenames[0] = "lkjljljlkjl"
-        SFilenames[1] = "kjlk99999888888"
-        SFilenames[1] = "k--ggg88"
-        kNumberOfFiles lenarray SFilenames
-        //print kNumberOfFiles
-        kFlag = 0
-    endif
-    
-    kTrig metro 1/kDur
-    
-    
-    if kTrig==1 then
-        printf "Filename = %s \n", kTrig, SFilenames[kCnt]
-        kCnt += 1
-    endif
-    
-    
-    
-    if kTrig==1 && kCnt<iNumberOfFiles then
-        //printks "test kCnt = %d\n", .1, kCnt
-        S_file_name strcatk SFilenames[1], " == \n"
-        printks S_file_name, .1
-        kCnt += 1
-    endif
-    */
-    
-    /*
-    S_instr_name = {{ play_sample }}
-    S_path = "D:\\src\\csound\\dev2\\csound\\dev_stohastic"
-    iCnt init 0
-    SFilenames[] directory S_path
-    iNumberOfFiles lenarray SFilenames
-
-    S_scoreline strcatk "i ", S_instr_name
-    S_scoreline strcatk S_scoreline, " 0 3 "
-    S_scoreline strcatk S_scoreline, " 0 3 "
-    scoreline_i  S_scoreline
-
-    until iCnt>=iNumberOfFiles do
-        printf_i "Filename = %s \n", 1, SFilenames[iCnt]
-        
-        S_scoreline strcatk "i ", S_instr_name
-        scoreline_i  S_scoreline
-        iCnt = iCnt+1
-    od
-    */
-    kDur init 10
+    kPortam init p4
+    kTempo init p5
     kFlag init 1
     kFftModType init 0
+    kNoteCnt init 0
+    kPauseCnt init 0
+    kMuteFlag init 0
+    kNoteCntMax init 8
+    kPauseCntMax init 4
     chnset kFftModType, "FftModType"
     
     if kFlag==1 then
+        kDur = giMaxDur*expcurve(kTempo, giMaxDur)
+        kDurVarMax = 1.5 * kDur
+        kDurVarMix = .5 * kDur
+        if kDur<giMinDur then
+            kDur=giMinDur
+            kDurVarMin = kDur
+        endif
+        kNoteLen = kDur * kPortam
         S_path = "C:\\home\\chernenko\\src\\csound\\dev2\\csound\\dev_stohastic\\"
+        printk(.2, kDur)
         kFlag = 0
     endif
     
     kTrig metro 1/kDur
     
     if kTrig==1 then
+    
+        printks "kMuteFlag = %f, kNoteCnt = %f, kPauseCnt = %f\n", .1, kMuteFlag, kNoteCnt, kPauseCnt
+    
+        if kNoteCnt > kNoteCntMax then
+            kMuteFlag = 1
+            kNoteCnt = 0
+        endif
+        
+        if kPauseCnt > kPauseCntMax then
+            kMuteFlag = 0
+            kPauseCnt = 0
+        endif
         //S_filename = S_path + "\\soundin.1"
         //gS_filename strcatk S_path, "soundin.1"
         
@@ -429,7 +464,12 @@ instr part_sample
         kTranspose = random:k(.8, 2)
         //event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0.5, 1, 0, kTranspose
         
-        event "i", "play_sample", 0,  kDur*.8, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
+        if kMuteFlag==0 then
+            event "i", "play_sample", 0,  kNoteLen, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
+            //kNoteCnt += 1
+        else
+            //kPauseCnt += 1
+        endif
         
         //kSampleIndx = floor(random:k(0, 6.5))
         kSampleIndx = floor(random:k(7, 13.5))
@@ -438,22 +478,48 @@ instr part_sample
         kFftChn = 1
         kTranspose = 1
         //event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0, 1, 1, 1
-        event "i", "play_sample", 0,  kDur*.8, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
         
-        kDur = random:k(8., 20)
+        if kMuteFlag==0 then
+            event "i", "play_sample", 0,  kNoteLen, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
+            kNoteCnt += 1
+        else
+            kPauseCnt += 1
+        endif
+        
+        kDur = random:k(kDurVarMin, kDurVarMax)
+        kNoteLen = kDur * kPortam
+        //printk(.1, kDur)
     endif
 endin
 
 
 instr play_sample
-    //asig[] diskin gS_filename, .05, 3, 1
     iSampleIndx = p4
     iSendMain = p5
     iSendFft = p6
     iFftChn = p7
     iTranspose = p8
+    iAtt = 1.5
+    iRel = 0.5
+    iEnvType init 0
+    if (iAtt + iRel) > p3 then
+        //iDelta = iAtt + iRel - p3
+        //iAtt = iAtt - iDelta*.7
+        //iRel = iRel - iDelta*.3
+        iEnvType = 1
+    endif
+    
     asig[] diskin gS_filename_arr[iSampleIndx], giSampleSpeed[iSampleIndx]*iTranspose, giSampleOffset[iSampleIndx], 1
-    kEnvAmp adsr 2, 0, 1, 0.5
+    
+   
+    if iEnvType==0 then
+        kEnvAmp adsr iAtt, 0, 1, iRel
+    else 
+        kEnvAmp linsegr 0, p3/2., .2, 0.001, .2, p3/2.-0.001, 0
+    endif
+    
+    
+    //kEnvAmp transeg 0.01, p3*0.75, -2, 1, p3*0.25, 2, 0.01
     
     asig[0] = asig[0] * giSampleGain[iSampleIndx]
     /*
@@ -505,10 +571,12 @@ i "SubstrPoly" 6 . .2 220
 //i "fft_my" 0 20
 //i "part" 0 120 "SubstrPoly"
 
-i "part_sample" 0 240
-i "fft_global" 0 240
-i "limiter" 0 240
+
+//                              kPortamInit     Tempo
+i "part_sample"     0   480     .8              .2
+i "fft_global" 0 480
+i "limiter" 0 480
 //i "dump_file" 0 20
-i "master_out" 0 240
+i "master_out" 0 480
 </CsScore>
 </CsoundSynthesizer>
