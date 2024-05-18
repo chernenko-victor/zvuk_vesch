@@ -76,6 +76,12 @@ seed 0
 
 //opcode exp_scale
 
+gS_instr_name[] init 3
+gS_instr_name[0] = "additive_my"
+gS_instr_name[1] = "SubstrPoly"
+gS_instr_name[2] = "play_sample"
+
+
 opcode spatial_my, 0, a
     aIn xin 
     
@@ -122,7 +128,8 @@ instr additive_my
     aMono *= linsegr:a(0, 0.05, 1, 0.05, 0)
     //aMono *= adsr:a(.2, .1, 1, .2)
     
-    spatial_my(aMono)
+    //spatial_my(aMono)
+    outs aMono, aMono
 endin
 
 instr SubstrPoly
@@ -141,8 +148,8 @@ instr SubstrPoly
     aMono polyseq lenarray(kFreqs), "rbjeq", a0, (kFreqs/400)*iFrqBase, kV, kQs, 1, 8
     aMono *= linsegr:a(0, 0.05, iAmp, 0.05, 0)
     
-    //outs aMono, aMono
-    spatial_my(aMono)
+    outs aMono, aMono
+    //spatial_my(aMono)
 endin
 
 instr fft_global
@@ -353,14 +360,14 @@ pauses +
 */
 
 /*
-== Transpose == 
+== Transpose == ++ 
 
 narrow
 wide
 */
 
 /*
-== Samples == 
+== Samples == ++
 
 dry low
 dry normal
@@ -373,7 +380,7 @@ fft(normal, low)
 */
 
 /*
-== FFt mode type ==
+== FFt mode type == ++
 (kModType)
 
     0   pvsfilter drone
@@ -411,6 +418,7 @@ widest
 instr part_sample
     kPortam init p4
     kTempo init p5
+    kInstrIndx = p6
     kFlag init 1
     kFftModType init 0
     kNoteCnt init 0
@@ -460,12 +468,18 @@ instr part_sample
         kSendFft = 1
         kFftChn = 0
         kTranspose = 1
+        kAmp = random:k(0.1, 0.8)
+        kFrq = random:k(110, 1100)
         
         kTranspose = random:k(.8, 2)
         //event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0.5, 1, 0, kTranspose
         
         if kMuteFlag==0 then
-            event "i", "play_sample", 0,  kNoteLen, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
+            if kInstrIndx==0 || kInstrIndx==1 then
+                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq
+            else
+                event "i", gS_instr_name[kInstrIndx], 0,  kNoteLen, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
+            endif
             //kNoteCnt += 1
         else
             //kPauseCnt += 1
@@ -480,7 +494,11 @@ instr part_sample
         //event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0, 1, 1, 1
         
         if kMuteFlag==0 then
-            event "i", "play_sample", 0,  kNoteLen, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
+            if kInstrIndx==0 || kInstrIndx==1 then
+                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq
+            else
+                event "i", gS_instr_name[kInstrIndx], 0,  kNoteLen, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
+            endif
             kNoteCnt += 1
         else
             kPauseCnt += 1
@@ -557,6 +575,34 @@ instr play_sample
     endif
 endin
 
+
+instr score
+    kStartDelta init 120.
+    kStartDeltaMin init 60*.5
+    kStartDeltaMax init 60*10
+    kPartDancity init .99
+    
+    kTrig metro 1/kStartDelta
+    
+    if kTrig == 1 then
+        kForm = rspline:k(0.1, 1., 1/(2), 1/(5))
+        kForm = (kForm>1?1:kForm)
+        kForm = (kForm<.1?.1:kForm)
+    
+        kStartDelta = kStartDeltaMax * expcurve((1.11 - kForm), 10) + kStartDeltaMin
+        kStartDelta /= 4
+        //kForm .1 kPartDancity = 0.95 | kForm .9 kPartDancity = 2.
+        kPartDancity = 1.2 * expcurve(kForm, 10) + .9
+        kPartLen = kPartDancity * kStartDelta
+        printks "===============================\nkForm = %f, kStartDelta = %f, kPartLen = %f\n===============================\n", 2, kForm, kStartDelta, kPartLen
+    
+        kPortamInit = .8
+        kTempo = .2
+        kInstrIndex = floor(random:k(0, 2.5))
+        event "i", "part_sample", 0, kPartLen, kPortamInit, kTempo, kInstrIndex
+    endif
+endin
+
 </CsInstruments>
 <CsScore>
 /*
@@ -572,11 +618,12 @@ i "SubstrPoly" 6 . .2 220
 //i "part" 0 120 "SubstrPoly"
 
 
-//                              kPortamInit     Tempo
-i "part_sample"     0   480     .8              .2
-i "fft_global" 0 480
-i "limiter" 0 480
-//i "dump_file" 0 20
-i "master_out" 0 480
+//                              kPortamInit     Tempo       kInstrIndex
+//i "part_sample"     0   480     .8              .2          2
+i "score" 0 3600
+i "fft_global" 0 3600
+i "limiter" 0 3600
+//i "dump_file" 0 3600
+i "master_out" 0 3600
 </CsScore>
 </CsoundSynthesizer>
