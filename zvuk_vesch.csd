@@ -30,6 +30,20 @@ chn_a "fftA", 2
 chn_a "fftB", 2
 chn_k "FftModType", 2
 
+giSampleBank[] init 4, 2
+
+giSampleBank[0][0] = 0
+giSampleBank[0][1] = 6
+
+giSampleBank[1][0] = 7
+giSampleBank[1][1] = 13
+
+giSampleBank[2][0] = -1
+giSampleBank[2][1] = -1
+
+giSampleBank[3][0] = -1
+giSampleBank[3][1] = -1
+
 
 gS_path1 = "C:\\home\\chernenko\\src\\csound\\dev2\\csound\\dev_stohastic\\soundin."
 gS_filename_arr[] init 14
@@ -76,10 +90,11 @@ seed 0
 
 //opcode exp_scale
 
-gS_instr_name[] init 3
+gS_instr_name[] init 4
 gS_instr_name[0] = "additive_my"
 gS_instr_name[1] = "SubstrPoly"
-gS_instr_name[2] = "play_sample"
+gS_instr_name[2] = "play_sample" //fft
+gS_instr_name[3] = "play_sample" //no fft
 
 
 opcode spatial_my, 0, a
@@ -109,9 +124,12 @@ opcode spatial_my, 0, a
 endop
 
 instr additive_my
-    seed 0
+    //seed 0
     iAmp = p4
     iFrq = p5
+    iSendMain = p6
+    iSendFft = p7
+    iFftChn = p8
     
     iAzimuthB = random:i(0., 360)
     iAzimuthE = random:i(0., 360)
@@ -129,27 +147,51 @@ instr additive_my
     //aMono *= adsr:a(.2, .1, 1, .2)
     
     //spatial_my(aMono)
-    outs aMono, aMono
+    //outs aMono, aMono
+    outs aMono*iSendMain, aMono*iSendMain
+    
+    if iFftChn==0 then
+        chnset aMono*iSendFft, "fftA"
+    else
+        chnset aMono*iSendFft, "fftB"
+    endif
+    
 endin
 
 instr SubstrPoly
-    seed 0
-    
-    a0 pinker
-    a0 *= ampdb(-12)
     //iFrqBase = random:i(220., 880.)
     iAmp = p4
     iFrqBase = p5
+    iSendMain = p6
+    iSendFft = p7
+    iFftChn = p8
+    
+    //seed 0
+    
+    a0 pinker
+    a0 *= ampdb(-12)
     
     kFreqs[] fillarray 400, 1400, 3000, 4400, 8000, 12000
     kQs[] fillarray    10,    20,   10,   20,   10,    20
     kV = ampdb(18)
     
-    aMono polyseq lenarray(kFreqs), "rbjeq", a0, (kFreqs/400)*iFrqBase, kV, kQs, 1, 8
+    kFrqMod[] poly 6, "rspline", .995, 1.005, 1, 10
+    kQMod[] poly 6, "rspline", .995, 1.005, 1, 10
+    
+    
+    aMono polyseq lenarray(kFreqs), "rbjeq", a0, (kFreqs/400)*iFrqBase*kFrqMod, kV, kQs*kQMod, 1, 8
     aMono *= linsegr:a(0, 0.05, iAmp, 0.05, 0)
     
-    outs aMono, aMono
+    //outs aMono, aMono
     //spatial_my(aMono)
+    
+    outs aMono*iSendMain, aMono*iSendMain
+    
+    if iFftChn==0 then
+        chnset aMono*iSendFft, "fftA"
+    else
+        chnset aMono*iSendFft, "fftB"
+    endif
 endin
 
 instr fft_global
@@ -343,27 +385,15 @@ instr part
 endin 
 
 
-/*
-== Temporythm == ++
-
-tempo +
-porto +
-pauses +
-
-===============================================================================
-                    tempo          porto               pauses
-===============================================================================             
-1   short slow      low            low                 frequently--middle, long
-2   long  slow      low            long                middle--rare, short
-3   short fast      high           low                 rare, short
-===============================================================================
-*/
 
 /*
-== Transpose == ++ 
+== Transpose == !!!!
 
 narrow
 wide
+
+continuesly -- discrete
+
 */
 
 /*
@@ -380,15 +410,16 @@ fft(normal, low)
 */
 
 /*
-== FFt mode type == ++
-(kModType)
-
-    0   pvsfilter drone
-    1   pvscross light
-    2   pvscross harshy
-    3   pvsvoc no scale
-    4   pvsvoc scale    
+Rever Echo
 */
+
+/*
+== Spatial ==
+concentred
+wider
+widest
+*/
+
 
 
 //===================================================
@@ -408,27 +439,65 @@ momentary
 */
 
 
-/*
-== Spatial ==
-concentred
-wider
-widest
-*/
+
 
 instr part_sample
     kPortam init p4
     kTempo init p5
     kInstrIndx = p6
+    
+    kSendMain1 = p7 
+    kSendFft1 = p8
+    kFftChn1 = p9
+    
+    kSendMain2 = p10
+    kSendFft2 = p11
+    kFftChn2 = p12
+    
+    
+    kForm = p13
+    //kFftModType init 0
+    kFftModType = p14
+    
+    kSampleBank0 = p15
+    kSampleBank1 = p16
+    
     kFlag init 1
-    kFftModType init 0
     kNoteCnt init 0
     kPauseCnt init 0
     kMuteFlag init 0
     kNoteCntMax init 8
     kPauseCntMax init 4
-    chnset kFftModType, "FftModType"
     
+    chnset kFftModType, "FftModType"
+  
+    /*
+    == Temporythm == ++
+
+    tempo +
+    porto +
+    pauses +
+
+    ===============================================================================
+                        tempo          porto               pauses
+    ===============================================================================             
+    1   short slow      low            short               frequently--middle, long
+    2   long  slow      low            long                middle--rare, short
+    3   short fast      high           short               rare, short
+    ===============================================================================
+    */    
+  
     if kFlag==1 then
+        kTempo = 1.1 - kForm
+        
+        if kForm < .3 then
+            kPortam = .5
+        elseif kForm >= .3 && kForm < .6  then
+            kPortam = .99
+        else
+            kPortam = .5
+        endif
+        
         kDur = giMaxDur*expcurve(kTempo, giMaxDur)
         kDurVarMax = 1.5 * kDur
         kDurVarMix = .5 * kDur
@@ -445,8 +514,10 @@ instr part_sample
     kTrig metro 1/kDur
     
     if kTrig==1 then
+        //seed 0
     
-        printks "kMuteFlag = %f, kNoteCnt = %f, kPauseCnt = %f\n", .1, kMuteFlag, kNoteCnt, kPauseCnt
+        //printks "kMuteFlag = %f, kNoteCnt = %f, kPauseCnt = %f\n", .1, kMuteFlag, kNoteCnt, kPauseCnt
+        printks "kTempo = %f, kDur = %f, kNoteLen = %f\n", .1, kTempo, kDur, kNoteLen
     
         if kNoteCnt > kNoteCntMax then
             kMuteFlag = 1
@@ -460,13 +531,19 @@ instr part_sample
         //S_filename = S_path + "\\soundin.1"
         //gS_filename strcatk S_path, "soundin.1"
         
-        kSampleIndx = floor(random:k(0, 6.5))
+        
+        //==    SampleBank0 ==
+        kSampleIndx = floor(random:k(giSampleBank[kSampleBank0][0], giSampleBank[kSampleBank0][1] + .5))
+        //kSampleIndx = floor(random:k(0, 6.5))
         //kSampleIndx = floor(random:k(7, 13.5))
         //printk 0, kSampleIndx
         //kSampleIndx = 13
-        kSendMain = 0
-        kSendFft = 1
-        kFftChn = 0
+        
+        /*
+        kSendMain1 = 0
+        kSendFft1 = 1
+        kFftChn1 = 0
+        */
         kTranspose = 1
         kAmp = random:k(0.1, 0.8)
         kFrq = random:k(110, 1100)
@@ -474,37 +551,51 @@ instr part_sample
         kTranspose = random:k(.8, 2)
         //event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0.5, 1, 0, kTranspose
         
+        //2DO: fft synth + sample
+        
         if kMuteFlag==0 then
             if kInstrIndx==0 || kInstrIndx==1 then
-                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq
-            else
-                event "i", gS_instr_name[kInstrIndx], 0,  kNoteLen, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
+                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq, kSendMain1, kSendFft1, kFftChn1
+            elseif kInstrIndx==2 || kInstrIndx==3 then
+                event "i", gS_instr_name[kInstrIndx], 0,  kNoteLen, kSampleIndx, kSendMain1, kSendFft1, kFftChn1, kTranspose
             endif
             //kNoteCnt += 1
         else
             //kPauseCnt += 1
         endif
         
+        
+        //==    SampleBank1 ==
+        kSampleIndx = floor(random:k(giSampleBank[kSampleBank1][0], giSampleBank[kSampleBank1][1] + .5))
         //kSampleIndx = floor(random:k(0, 6.5))
-        kSampleIndx = floor(random:k(7, 13.5))
-        kSendMain = 0
-        kSendFft = 1
-        kFftChn = 1
+        //kSampleIndx = floor(random:k(7, 13.5))
+        
+        /*
+        kSendMain2 = 0
+        kSendFft2 = 1
+        kFftChn2 = 1
+        */
+        
         kTranspose = 1
         //event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0, 1, 1, 1
         
         if kMuteFlag==0 then
             if kInstrIndx==0 || kInstrIndx==1 then
-                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq
-            else
-                event "i", gS_instr_name[kInstrIndx], 0,  kNoteLen, kSampleIndx, kSendMain, kSendFft, kFftChn, kTranspose
+                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq, kSendMain2, kSendFft2, kFftChn2
+            elseif kInstrIndx==2 || kInstrIndx==3 then
+                event "i", gS_instr_name[kInstrIndx], 0,  kNoteLen, kSampleIndx, kSendMain2, kSendFft2, kFftChn2, kTranspose
             endif
             kNoteCnt += 1
         else
             kPauseCnt += 1
         endif
         
-        kDur = random:k(kDurVarMin, kDurVarMax)
+        kDur = random:k(kDurVarMin, kDurVarMax) 
+        /*
+        2DO:
+            continues -- discrete
+            strict -- free rythm
+        */
         kNoteLen = kDur * kPortam
         //printk(.1, kDur)
     endif
@@ -516,7 +607,7 @@ instr play_sample
     iSendMain = p5
     iSendFft = p6
     iFftChn = p7
-    iTranspose = p8
+    iTranspose = p8    
     iAtt = 1.5
     iRel = 0.5
     iEnvType init 0
@@ -582,24 +673,90 @@ instr score
     kStartDeltaMax init 60*10
     kPartDancity init .99
     
+    kSampleBank0 init 0
+    kSampleBank1 init 1
+    
+    kForm = rspline:k(0.1, 1., 1/(2), 1/(5))
+    kForm = (kForm>1?1:kForm)
+    kForm = (kForm<.1?.1:kForm)
+    
+    kStartDelta = kStartDeltaMax * expcurve((1.11 - kForm), 10) + kStartDeltaMin
+    kStartDelta /= 4
+    //kForm .1 kPartDancity = 0.95 | kForm .9 kPartDancity = 2.
+    kPartDancity = 1.2 * expcurve(kForm, 10) + .9
+    kPartLen = kPartDancity * kStartDelta
+    
     kTrig metro 1/kStartDelta
     
     if kTrig == 1 then
-        kForm = rspline:k(0.1, 1., 1/(2), 1/(5))
-        kForm = (kForm>1?1:kForm)
-        kForm = (kForm<.1?.1:kForm)
-    
-        kStartDelta = kStartDeltaMax * expcurve((1.11 - kForm), 10) + kStartDeltaMin
-        kStartDelta /= 4
-        //kForm .1 kPartDancity = 0.95 | kForm .9 kPartDancity = 2.
-        kPartDancity = 1.2 * expcurve(kForm, 10) + .9
-        kPartLen = kPartDancity * kStartDelta
         printks "===============================\nkForm = %f, kStartDelta = %f, kPartLen = %f\n===============================\n", 2, kForm, kStartDelta, kPartLen
     
         kPortamInit = .8
         kTempo = .2
-        kInstrIndex = floor(random:k(0, 2.5))
-        event "i", "part_sample", 0, kPartLen, kPortamInit, kTempo, kInstrIndex
+        kInstrIndex = floor(random:k(0, 3.5))
+        //kInstrIndex = 3
+        
+        /*
+        == FFt mode type == ++
+        (kModType)
+
+            0   pvsfilter drone
+            1   pvscross light
+            2   pvscross harshy
+            3   pvsvoc no scale
+            4   pvsvoc scale    
+        */
+
+        kFftModType = floor(random:k(0, 4.5))
+        
+        if kInstrIndex==0 || kInstrIndex==1 then
+            kSendMain1 = 1
+            kSendFft1 = 0
+            kFftChn1 = 0
+        
+            kSendMain2 = 0
+            kSendFft2 = 0
+            kFftChn2 = 0
+        elseif kInstrIndex==2 then
+            kSendMain1 = 0
+            kSendFft1 = 1
+            kFftChn1 = 0
+        
+            kSendMain2 = 0
+            kSendFft2 = 1
+            kFftChn2 = 1
+        elseif kInstrIndex==3 then
+            kSendMain1 = 1
+            kSendFft1 = 0
+            kFftChn1 = 0
+        
+            kSendMain2 = 0
+            kSendFft2 = 0
+            kFftChn2 = 1
+        endif
+        
+        
+        kSampleBankSel = floor(random:k(0, 1.5))
+        
+        if kSampleBankSel==0 then
+            kSampleBank0 = 0
+            kSampleBank1 = 1
+        else
+            kSampleBank0 = 1
+            kSampleBank1 = 0
+        endif
+        
+        event "i", "part_sample", 0, kPartLen, kPortamInit, kTempo, kInstrIndex, \
+            kSendMain1, \ 
+            kSendFft1, \
+            kFftChn1, \
+            kSendMain2, \ 
+            kSendFft2, \
+            kFftChn2, \
+            kForm, \
+            kFftModType, \
+            kSampleBank0, \
+            kSampleBank1
     endif
 endin
 
