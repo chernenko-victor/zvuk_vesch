@@ -23,6 +23,8 @@ gS_dump_file = "C:\\home\\chernenko\\src\\csound\\tmp\\zvuk_vesch.wav"
 gaDumpOut[] init 8
 gaSpatialOut[] init 8
 
+//gaReverSend init 0
+
 giDurArr[] fillarray 1, 2, 3, 4, 6, 8, 12, 16, 24, 32
 giDurMin init .25
 
@@ -90,12 +92,31 @@ seed 0
 
 //opcode exp_scale
 
-gS_instr_name[] init 4
+gS_instr_name[] init 8
 gS_instr_name[0] = "additive_my"
 gS_instr_name[1] = "SubstrPoly"
 gS_instr_name[2] = "play_sample" //fft
 gS_instr_name[3] = "play_sample" //no fft
+gS_instr_name[4] = "closed_hihat"
+gS_instr_name[5] = "snare"
+gS_instr_name[6] = "bass_drum"
+gS_instr_name[7] = "additive_my_harmonic"
 
+giRythmArr1[] fillarray 1, 2, 3, 4, 6, 8, 12, 16, 24, 32
+giRythmArr1Weight[] fillarray 50, 40, 30, 50, 30, 40, 10, 10, 5, 5
+//print sumarray(giRythmArr1Weight)
+giRythmArr1Weight = giRythmArr1Weight/sumarray(giRythmArr1Weight)
+//print sumarray(giRythmArr1Weight)
+//printarray(giRythmArr1Weight)
+
+
+
+//===========================================================================
+//====================      LIBS, OPCODEs       ============================
+//===========================================================================
+
+
+#include "C:\\home\\chernenko\\src\\csound\\dev2\\csound\\include\\math\\stochastic\\distribution3.inc.csd"
 
 opcode spatial_my, 0, a
     aIn xin 
@@ -121,7 +142,14 @@ opcode spatial_my, 0, a
     //send
     gaSpatialOut += aSpatialOut
     gaDumpOut += aSpatialOut
+    
+    //chnmix    aSpatialOut*iRvbSendAmt, "ReverbSend"
 endop
+
+
+//===========================================================================
+//====================      INSTRUMENTS =====================================
+//===========================================================================
 
 instr additive_my
     //seed 0
@@ -130,6 +158,7 @@ instr additive_my
     iSendMain = p6
     iSendFft = p7
     iFftChn = p8
+    iRvbSendAmt = p9
     
     iAzimuthB = random:i(0., 360)
     iAzimuthE = random:i(0., 360)
@@ -156,7 +185,48 @@ instr additive_my
         chnset aMono*iSendFft, "fftB"
     endif
     
+    chnmix    aMono*iRvbSendAmt, "ReverbSend"
 endin
+
+
+instr additive_my_harmonic
+    //seed 0
+    iAmp = p4
+    iFrq = p5
+    iSendMain = p6
+    iSendFft = p7
+    iFftChn = p8
+    iRvbSendAmt = p9
+    
+    iAzimuthB = random:i(0., 360)
+    iAzimuthE = random:i(0., 360)
+     
+    iAltitudeB = random:i(0., 360)
+    iAltitudeE = random:i(0., 360)
+
+    kFrqMod[] poly 8, "rspline", .995, 1.005, 1, 10
+
+    kFreqs[] fillarray 1, 2, 3, 4, 5, 6, 7, 8
+    kAmps[] fillarray 1, 1/2, 1/3, 1/4, 1/5, 1/6, 1/7, 1/8
+    aOut[] poly 8, "oscili", kAmps/sumarray(kAmps), kFreqs * kFrqMod * iFrq
+    
+    aMono sumarray aOut
+    aMono *= linsegr:a(0, 0.05, 1, 0.05, 0)
+    //aMono *= adsr:a(.2, .1, 1, .2)
+    
+    //spatial_my(aMono)
+    //outs aMono, aMono
+    outs aMono*iSendMain, aMono*iSendMain
+    
+    if iFftChn==0 then
+        chnset aMono*iSendFft, "fftA"
+    else
+        chnset aMono*iSendFft, "fftB"
+    endif
+    
+    chnmix    aMono*iRvbSendAmt, "ReverbSend"
+endin
+
 
 instr SubstrPoly
     //iFrqBase = random:i(220., 880.)
@@ -165,6 +235,7 @@ instr SubstrPoly
     iSendMain = p6
     iSendFft = p7
     iFftChn = p8
+    iRvbSendAmt = p9
     
     //seed 0
     
@@ -175,8 +246,8 @@ instr SubstrPoly
     kQs[] fillarray    10,    20,   10,   20,   10,    20
     kV = ampdb(18)
     
-    kFrqMod[] poly 6, "rspline", .995, 1.005, 1, 10
-    kQMod[] poly 6, "rspline", .995, 1.005, 1, 10
+    kFrqMod[] poly 6, "rspline", .99, 1.01, 1, 10
+    kQMod[] poly 6, "rspline", .9, 1.1, 1, 10
     
     
     aMono polyseq lenarray(kFreqs), "rbjeq", a0, (kFreqs/400)*iFrqBase*kFrqMod, kV, kQs*kQMod, 1, 8
@@ -192,6 +263,8 @@ instr SubstrPoly
     else
         chnset aMono*iSendFft, "fftB"
     endif
+    
+    chnmix    aMono*iRvbSendAmt, "ReverbSend"
 endin
 
 instr fft_global
@@ -218,6 +291,8 @@ instr fft_global
     fSigBL      pvsanal   aInB, gifftsiz, gioverlap, gifftsiz*2, giwintyp
     fSigALScale = pvscale(fSigAL, expseg:k(.2, p3, 2.))
     fSigBLScale = pvscale(fSigBL, expseg:k(2., p3, .2))
+    
+    kRvbSendAmt = rspline(0.01, 0.55, .1, 2)
     
     
     if kFftModType==0 then
@@ -254,6 +329,8 @@ instr fft_global
     
     chnclear "fftA"
     chnclear "fftB"
+    
+    chnmix    aOut*kRvbSendAmt, "ReverbSend"
 endin
 
 instr fft_my
@@ -294,6 +371,132 @@ instr fft_my
     //spatial_my(aIn[0])
     
     outs aIn[0], aIn[0]
+endin
+
+
+instr bass_drum ; sound 1 - bass drum
+iamp        random      0, 0.5               ; amplitude randomly chosen
+p3          =           0.2                  ; define duration for this sound
+aenv        line        1,p3,0.001           ; amplitude envelope (percussive)
+icps        exprand     30                   ; cycles-per-second offset
+kcps        expon       icps+120,p3,20       ; pitch glissando
+aSig        oscil       aenv*0.5*iamp,kcps,-1//giSine  ; oscillator
+            outs        aSig, aSig           ; send audio to outputs
+//gaRvbSend   =           gaRvbSend + (aSig * giRvbSendAmt) ; add to send
+  endin
+
+  instr snare ; sound 3 - snare
+iAmp        random     0, 0.5                  ; amplitude randomly chosen
+p3          =          0.3                     ; define duration
+aEnv        expon      1, p3, 0.001            ; amp. envelope (percussive)
+aNse        noise      1, 0                    ; create noise component
+iCps        exprand    20                      ; cps offset
+kCps        expon      250 + iCps, p3, 200+iCps; create tone component gliss
+aJit        randomi    0.2, 1.8, 10000         ; jitter on freq.
+aTne        oscil      aEnv, kCps*aJit, -1//giSine ; create tone component
+aSig        sum        aNse*0.1, aTne          ; mix noise and tone components
+aRes        comb       aSig, 0.02, 0.0035      ; comb creates a 'ring'
+aSig        =          aRes * aEnv * iAmp      ; apply env. and amp. factor
+            outs       aSig, aSig              ; send audio to outputs
+//gaRvbSend   =          gaRvbSend + (aSig * giRvbSendAmt); add to send
+  endin
+
+  instr closed_hihat ; sound 4 - closed hi-hat
+iAmp        random      0, 1.5               ; amplitude randomly chosen
+p3          =           0.1                  ; define duration for this sound
+aEnv        expon       1,p3,0.001           ; amplitude envelope (percussive)
+aSig        noise       aEnv, 0              ; create sound for closed hi-hat
+aSig        buthp       aSig*0.5*iAmp, 12000 ; highpass filter sound
+aSig        buthp       aSig,          12000 ; -and again to sharpen cutoff
+            outs        aSig, aSig           ; send audio to outputs
+//gaRvbSend   =           gaRvbSend + (aSig * giRvbSendAmt) ; add to send
+  endin
+
+
+
+instr play_sample
+    iSampleIndx = p4
+    iSendMain = p5
+    iSendFft = p6
+    iFftChn = p7
+    iTranspose = p8    
+    iRvbSendAmt = p9
+    
+    iAtt = 1.5
+    iRel = 0.5
+    iEnvType init 0
+    if (iAtt + iRel) > p3 then
+        //iDelta = iAtt + iRel - p3
+        //iAtt = iAtt - iDelta*.7
+        //iRel = iRel - iDelta*.3
+        iEnvType = 1
+    endif
+    
+    asig[] diskin gS_filename_arr[iSampleIndx], giSampleSpeed[iSampleIndx]*iTranspose, giSampleOffset[iSampleIndx], 1
+    
+   
+    if iEnvType==0 then
+        kEnvAmp adsr iAtt, 0, 1, iRel
+    else 
+        kEnvAmp linsegr 0, p3/2., .2, 0.001, .2, p3/2.-0.001, 0
+    endif
+    
+    
+    //kEnvAmp transeg 0.01, p3*0.75, -2, 1, p3*0.25, 2, 0.01
+    
+    asig[0] = asig[0] * giSampleGain[iSampleIndx]
+    /*
+    kthreshold = 0.6
+    icomp1 = .2
+    icomp2 = 2
+    irtime = 0.01
+    iftime = 0.5
+    asig[0] dam asig[0], kthreshold, icomp1, icomp2, irtime, iftime
+    
+    asig[0] = asig[0] * 2
+    */
+    
+    kthresh = 0
+    kloknee = 60
+    khiknee = 80
+    kratio  = 4
+    katt    = 0.1
+    krel    = .5
+    ilook   = .02
+    asig[0]  compress asig[0], asig[0], kthresh, kloknee, khiknee, kratio, katt, krel, ilook
+    asig[0] = asig[0] * giSampleVolAfterComp[iSampleIndx]
+    
+    
+    asig[0] butterhp asig[0], 50
+    
+    asig[0]  = limit(asig[0], -0.99, .99) 
+    
+    outs asig[0]*kEnvAmp*iSendMain, asig[0]*kEnvAmp*iSendMain
+    
+    if iFftChn==0 then
+        chnset asig[0]*kEnvAmp*iSendFft, "fftA"
+    else
+        chnset asig[0]*kEnvAmp*iSendFft, "fftB"
+    endif
+    
+    chnmix    asig[0]*kEnvAmp*iRvbSendAmt, "ReverbSend"
+endin
+
+
+
+//===========================================================================
+//====================      EFFECTS     =====================================
+//===========================================================================
+
+
+instr rever
+    iPan = .2
+    aInSig       chnget    "ReverbSend"   ; read audio from the named channel
+    kTime        init      4              ; reverb time
+    kHDif        init      0.5            ; 'high frequency diffusion' (0 - 1)
+    aRvb         nreverb   aInSig, kTime, kHDif ; create reverb signal
+    outs         aRvb*iPan, aRvb*(1-iPan)               ; send audio to outputs
+    chnclear  "ReverbSend"   ; clear the named channel
 endin
 
 instr limiter
@@ -386,6 +589,11 @@ endin
 
 
 
+
+//===========================================================================
+//====================      ALGO SCORE   =====================================
+//===========================================================================
+
 /*
 == Transpose == !!!!
 
@@ -469,6 +677,8 @@ instr part_sample
     kNoteCntMax init 8
     kPauseCntMax init 4
     
+    kDurMinDiscr init .2
+    
     chnset kFftModType, "FftModType"
   
     /*
@@ -506,10 +716,18 @@ instr part_sample
             kDurVarMin = kDur
         endif
         kNoteLen = kDur * kPortam
+        
+        kDurMinDiscr = kDur
+        
         S_path = "C:\\home\\chernenko\\src\\csound\\dev2\\csound\\dev_stohastic\\"
         printk(.2, kDur)
         kFlag = 0
     endif
+    
+    kAmp = rspline(0.01, 0.95, .1, 2)
+    kRevLev = 1. - kAmp
+    
+    kRevLevSample = rspline(0.01, 0.55, .1, 2)
     
     kTrig metro 1/kDur
     
@@ -517,7 +735,7 @@ instr part_sample
         //seed 0
     
         //printks "kMuteFlag = %f, kNoteCnt = %f, kPauseCnt = %f\n", .1, kMuteFlag, kNoteCnt, kPauseCnt
-        printks "kTempo = %f, kDur = %f, kNoteLen = %f\n", .1, kTempo, kDur, kNoteLen
+        printks "kTempo = %f, kDur = %f, kNoteLen = %f, kAmp = %f, kRevLev = %f\n", .1, kTempo, kDur, kNoteLen, kAmp, kRevLev
     
         if kNoteCnt > kNoteCntMax then
             kMuteFlag = 1
@@ -545,19 +763,21 @@ instr part_sample
         kFftChn1 = 0
         */
         kTranspose = 1
-        kAmp = random:k(0.1, 0.8)
+        //kAmp = random:k(0.1, 0.8)
         kFrq = random:k(110, 1100)
         
         kTranspose = random:k(.8, 2)
         //event "i", "play_sample", 0,  kDur*.8, kSampleIndx, 0.5, 1, 0, kTranspose
         
-        //2DO: fft synth + sample
+        //2DO: fft sample + synth
         
         if kMuteFlag==0 then
             if kInstrIndx==0 || kInstrIndx==1 then
-                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq, kSendMain1, kSendFft1, kFftChn1
+                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq, kSendMain1, kSendFft1, kFftChn1, kRevLev
             elseif kInstrIndx==2 || kInstrIndx==3 then
-                event "i", gS_instr_name[kInstrIndx], 0,  kNoteLen, kSampleIndx, kSendMain1, kSendFft1, kFftChn1, kTranspose
+                event "i", gS_instr_name[kInstrIndx], 0,  kNoteLen, kSampleIndx, kSendMain1, kSendFft1, kFftChn1, kTranspose, kRevLevSample
+            else
+                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq, kSendMain1, kSendFft1, kFftChn1, kRevLev
             endif
             //kNoteCnt += 1
         else
@@ -581,90 +801,48 @@ instr part_sample
         
         if kMuteFlag==0 then
             if kInstrIndx==0 || kInstrIndx==1 then
-                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq, kSendMain2, kSendFft2, kFftChn2
+                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq, kSendMain2, kSendFft2, kFftChn2, kRevLev
             elseif kInstrIndx==2 || kInstrIndx==3 then
-                event "i", gS_instr_name[kInstrIndx], 0,  kNoteLen, kSampleIndx, kSendMain2, kSendFft2, kFftChn2, kTranspose
+                event "i", gS_instr_name[kInstrIndx], 0,  kNoteLen, kSampleIndx, kSendMain2, kSendFft2, kFftChn2, kTranspose, kRevLevSample
+            else
+                event "i", gS_instr_name[kInstrIndx], 0, kNoteLen, kAmp, kFrq, kSendMain2, kSendFft2, kFftChn2, kRevLev
             endif
             kNoteCnt += 1
         else
             kPauseCnt += 1
         endif
         
-        kDur = random:k(kDurVarMin, kDurVarMax) 
+        
         /*
         2DO:
-            continues -- discrete
             strict -- free rythm
         */
+        
+        //continues -- discrete
+        //if floor(random:k(0, 1.5))==0 then
+        if kForm < .6 then
+            kDur = random:k(kDurVarMin, kDurVarMax) 
+        else
+            iSeedType = 0
+            kTypeOfDistribDiscr = 1 //uniform
+            kMinDiscr = 0
+            kMaxDiscr = 1
+            kDistribDepthDiscr = 1
+            kLineDiscr[] = giRythmArr1Weight
+            kDurInxDiscr = get_discr_distr_k(iSeedType, kTypeOfDistribDiscr, kMinDiscr, kMaxDiscr, kDistribDepthDiscr, kLineDiscr)
+            kDur = kDurMinDiscr*giRythmArr1[kDurInxDiscr]
+            printks "DISCRETE :: kDurInxDiscr = %d, kDur = %f", .1, kDurInxDiscr, kDurMinDiscr*giRythmArr1[kDurInxDiscr]
+        endif
+       
         kNoteLen = kDur * kPortam
         //printk(.1, kDur)
+        
+        //===================   DEBUG       ======================
+        //kDur = 1
+        //kNoteLen = .8
     endif
 endin
 
-
-instr play_sample
-    iSampleIndx = p4
-    iSendMain = p5
-    iSendFft = p6
-    iFftChn = p7
-    iTranspose = p8    
-    iAtt = 1.5
-    iRel = 0.5
-    iEnvType init 0
-    if (iAtt + iRel) > p3 then
-        //iDelta = iAtt + iRel - p3
-        //iAtt = iAtt - iDelta*.7
-        //iRel = iRel - iDelta*.3
-        iEnvType = 1
-    endif
-    
-    asig[] diskin gS_filename_arr[iSampleIndx], giSampleSpeed[iSampleIndx]*iTranspose, giSampleOffset[iSampleIndx], 1
-    
-   
-    if iEnvType==0 then
-        kEnvAmp adsr iAtt, 0, 1, iRel
-    else 
-        kEnvAmp linsegr 0, p3/2., .2, 0.001, .2, p3/2.-0.001, 0
-    endif
-    
-    
-    //kEnvAmp transeg 0.01, p3*0.75, -2, 1, p3*0.25, 2, 0.01
-    
-    asig[0] = asig[0] * giSampleGain[iSampleIndx]
-    /*
-    kthreshold = 0.6
-    icomp1 = .2
-    icomp2 = 2
-    irtime = 0.01
-    iftime = 0.5
-    asig[0] dam asig[0], kthreshold, icomp1, icomp2, irtime, iftime
-    
-    asig[0] = asig[0] * 2
-    */
-    
-    kthresh = 0
-    kloknee = 60
-    khiknee = 80
-    kratio  = 4
-    katt    = 0.1
-    krel    = .5
-    ilook   = .02
-    asig[0]  compress asig[0], asig[0], kthresh, kloknee, khiknee, kratio, katt, krel, ilook
-    asig[0] = asig[0] * giSampleVolAfterComp[iSampleIndx]
-    
-    
-    asig[0] butterhp asig[0], 50
-    
-    asig[0]  = limit(asig[0], -0.99, .99) 
-    
-    outs asig[0]*kEnvAmp*iSendMain, asig[0]*kEnvAmp*iSendMain
-    
-    if iFftChn==0 then
-        chnset asig[0]*kEnvAmp*iSendFft, "fftA"
-    else
-        chnset asig[0]*kEnvAmp*iSendFft, "fftB"
-    endif
-endin
 
 
 instr score
@@ -693,8 +871,10 @@ instr score
     
         kPortamInit = .8
         kTempo = .2
-        kInstrIndex = floor(random:k(0, 3.5))
-        //kInstrIndex = 3
+        kInstrIndex = floor(random:k(0, lenarray(gS_instr_name)-.5))
+        
+        //===================   DEBUG       ======================
+        //kInstrIndex = 7
         
         /*
         == FFt mode type == ++
@@ -774,13 +954,14 @@ i "SubstrPoly" 6 . .2 220
 //i "fft_my" 0 20
 //i "part" 0 120 "SubstrPoly"
 
-
 //                              kPortamInit     Tempo       kInstrIndex
 //i "part_sample"     0   480     .8              .2          2
-i "score" 0 3600
-i "fft_global" 0 3600
-i "limiter" 0 3600
-//i "dump_file" 0 3600
-i "master_out" 0 3600
+i "score" 0 -1
+i "fft_global" 0 -1
+i "rever" 0 -1
+i "limiter" 0 -1
+//i "dump_file" 0 -1
+i "master_out" 0 -1
+f0 z
 </CsScore>
 </CsoundSynthesizer>
