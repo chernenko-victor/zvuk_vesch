@@ -127,13 +127,56 @@ opcode spatial_my, 0, a
     iAltitudeB = random:i(0., 360)
     iAltitudeE = random:i(0., 360)
     
-    
     //spatialization
     aSpatialOut[] init 8
     aBform[] init 4
     
     kalpha line iAzimuthB, p3, iAzimuthE
     kbeta line iAltitudeB, p3, iAltitudeE
+    
+    //azimuth, altitude
+    aBform bformenc1 aIn, kalpha, kbeta
+    aSpatialOut bformdec1 5, aBform
+    
+    //send
+    gaSpatialOut += aSpatialOut
+    gaDumpOut += aSpatialOut
+    
+    //chnmix    aSpatialOut*iRvbSendAmt, "ReverbSend"
+endop
+
+
+opcode spatial_my_var, 0, a
+    aIn xin 
+
+    kCentrAz init 0
+    kCentrAlt init 0
+    kDur init 30
+    
+    //spatialization
+    aSpatialOut[] init 8
+    aBform[] init 4
+
+    kDencity = rspline:k(.01, .99, .01, .1)
+    kSpeed = rspline:k(.01, .99, .01, .1)
+    
+    
+    kTrig metro 1/kDur
+    if kTrig == 1 then
+        kCentrAz = random:k(kCentrAz-90., kCentrAz+90.)
+        kCentrAz = kCentrAz%360
+        //printks "kCentrAz = %f\n", .1, kCentrAz 
+        kCentrAlt = random:k(kCentrAlt-90., kCentrAlt+90.)
+        kCentrAlt = kCentrAlt%360
+        
+        kDeltaAz = 360. * expcurve(kDencity, 360./10)
+        kDeltaAlt = 360. * expcurve(kDencity, 360./10)
+        
+        printks "kDeltaAz = %f, kDeltaAlt = %f\n", .1, kDeltaAz, kDeltaAlt
+    endif  
+      
+    kalpha = rspline:k(kCentrAz+kDeltaAz, kCentrAz-kDeltaAz, .1, 2)
+    kbeta = rspline:k(kCentrAlt+kDeltaAlt, kCentrAlt-kDeltaAlt, .1, 2)
     
     //azimuth, altitude
     aBform bformenc1 aIn, kalpha, kbeta
@@ -175,9 +218,9 @@ instr additive_my
     aMono *= linsegr:a(0, 0.05, 1, 0.05, 0)
     //aMono *= adsr:a(.2, .1, 1, .2)
     
-    //spatial_my(aMono)
+    spatial_my_var(aMono)
     //outs aMono, aMono
-    outs aMono*iSendMain, aMono*iSendMain
+    //outs aMono*iSendMain, aMono*iSendMain
     
     if iFftChn==0 then
         chnset aMono*iSendFft, "fftA"
@@ -214,9 +257,9 @@ instr additive_my_harmonic
     aMono *= linsegr:a(0, 0.05, 1, 0.05, 0)
     //aMono *= adsr:a(.2, .1, 1, .2)
     
-    //spatial_my(aMono)
+    spatial_my_var(aMono)
     //outs aMono, aMono
-    outs aMono*iSendMain, aMono*iSendMain
+    //outs aMono*iSendMain, aMono*iSendMain
     
     if iFftChn==0 then
         chnset aMono*iSendFft, "fftA"
@@ -254,9 +297,9 @@ instr SubstrPoly
     aMono *= linsegr:a(0, 0.05, iAmp, 0.05, 0)
     
     //outs aMono, aMono
-    //spatial_my(aMono)
+    spatial_my_var(aMono)
     
-    outs aMono*iSendMain, aMono*iSendMain
+    //outs aMono*iSendMain, aMono*iSendMain
     
     if iFftChn==0 then
         chnset aMono*iSendFft, "fftA"
@@ -324,8 +367,8 @@ instr fft_global
     
     aOut  = limit(aOut, -0.99, .99)
     
-    //spatial_my(aIn[0])
-    outs aOut, aOut
+    spatial_my_var(aOut)
+    //outs aOut, aOut
     
     chnclear "fftA"
     chnclear "fftB"
@@ -368,48 +411,51 @@ instr fft_my
     iftime = 0.5
     aIn[0] dam aIn[0], kthreshold, icomp1, icomp2, irtime, iftime
     aIn[0] = aIn[0] * 5
-    //spatial_my(aIn[0])
+    spatial_my_var(aIn[0])
     
-    outs aIn[0], aIn[0]
+    //outs aIn[0], aIn[0]
 endin
 
 
 instr bass_drum ; sound 1 - bass drum
-iamp        random      0, 0.5               ; amplitude randomly chosen
-p3          =           0.2                  ; define duration for this sound
-aenv        line        1,p3,0.001           ; amplitude envelope (percussive)
-icps        exprand     30                   ; cycles-per-second offset
-kcps        expon       icps+120,p3,20       ; pitch glissando
-aSig        oscil       aenv*0.5*iamp,kcps,-1//giSine  ; oscillator
-            outs        aSig, aSig           ; send audio to outputs
-//gaRvbSend   =           gaRvbSend + (aSig * giRvbSendAmt) ; add to send
+    iamp        random      0, 0.5               ; amplitude randomly chosen
+    p3          =           0.2                  ; define duration for this sound
+    aenv        line        1,p3,0.001           ; amplitude envelope (percussive)
+    icps        exprand     30                   ; cycles-per-second offset
+    kcps        expon       icps+120,p3,20       ; pitch glissando
+    aSig        oscil       aenv*0.5*iamp,kcps,-1//giSine  ; oscillator
+    //outs        aSig, aSig           ; send audio to outputs
+    spatial_my_var(aSig)
+    //gaRvbSend   =           gaRvbSend + (aSig * giRvbSendAmt) ; add to send
   endin
 
   instr snare ; sound 3 - snare
-iAmp        random     0, 0.5                  ; amplitude randomly chosen
-p3          =          0.3                     ; define duration
-aEnv        expon      1, p3, 0.001            ; amp. envelope (percussive)
-aNse        noise      1, 0                    ; create noise component
-iCps        exprand    20                      ; cps offset
-kCps        expon      250 + iCps, p3, 200+iCps; create tone component gliss
-aJit        randomi    0.2, 1.8, 10000         ; jitter on freq.
-aTne        oscil      aEnv, kCps*aJit, -1//giSine ; create tone component
-aSig        sum        aNse*0.1, aTne          ; mix noise and tone components
-aRes        comb       aSig, 0.02, 0.0035      ; comb creates a 'ring'
-aSig        =          aRes * aEnv * iAmp      ; apply env. and amp. factor
-            outs       aSig, aSig              ; send audio to outputs
-//gaRvbSend   =          gaRvbSend + (aSig * giRvbSendAmt); add to send
+    iAmp        random     0, 0.5                  ; amplitude randomly chosen
+    p3          =          0.3                     ; define duration
+    aEnv        expon      1, p3, 0.001            ; amp. envelope (percussive)
+    aNse        noise      1, 0                    ; create noise component
+    iCps        exprand    20                      ; cps offset
+    kCps        expon      250 + iCps, p3, 200+iCps; create tone component gliss
+    aJit        randomi    0.2, 1.8, 10000         ; jitter on freq.
+    aTne        oscil      aEnv, kCps*aJit, -1//giSine ; create tone component
+    aSig        sum        aNse*0.1, aTne          ; mix noise and tone components
+    aRes        comb       aSig, 0.02, 0.0035      ; comb creates a 'ring'
+    aSig        =          aRes * aEnv * iAmp      ; apply env. and amp. factor
+    spatial_my_var(aSig)
+    //outs       aSig, aSig              ; send audio to outputs
+    //gaRvbSend   =          gaRvbSend + (aSig * giRvbSendAmt); add to send
   endin
 
   instr closed_hihat ; sound 4 - closed hi-hat
-iAmp        random      0, 1.5               ; amplitude randomly chosen
-p3          =           0.1                  ; define duration for this sound
-aEnv        expon       1,p3,0.001           ; amplitude envelope (percussive)
-aSig        noise       aEnv, 0              ; create sound for closed hi-hat
-aSig        buthp       aSig*0.5*iAmp, 12000 ; highpass filter sound
-aSig        buthp       aSig,          12000 ; -and again to sharpen cutoff
-            outs        aSig, aSig           ; send audio to outputs
-//gaRvbSend   =           gaRvbSend + (aSig * giRvbSendAmt) ; add to send
+    iAmp        random      0, 1.5               ; amplitude randomly chosen
+    p3          =           0.1                  ; define duration for this sound
+    aEnv        expon       1,p3,0.001           ; amplitude envelope (percussive)
+    aSig        noise       aEnv, 0              ; create sound for closed hi-hat
+    aSig        buthp       aSig*0.5*iAmp, 12000 ; highpass filter sound
+    aSig        buthp       aSig,          12000 ; -and again to sharpen cutoff
+    spatial_my_var(aSig)
+    //outs        aSig, aSig           ; send audio to outputs
+    //gaRvbSend   =           gaRvbSend + (aSig * giRvbSendAmt) ; add to send
   endin
 
 
@@ -471,7 +517,8 @@ instr play_sample
     
     asig[0]  = limit(asig[0], -0.99, .99) 
     
-    outs asig[0]*kEnvAmp*iSendMain, asig[0]*kEnvAmp*iSendMain
+    //outs asig[0]*kEnvAmp*iSendMain, asig[0]*kEnvAmp*iSendMain
+    spatial_my_var(asig[0]*kEnvAmp*iSendMain)
     
     if iFftChn==0 then
         chnset asig[0]*kEnvAmp*iSendFft, "fftA"
@@ -495,8 +542,23 @@ instr rever
     kTime        init      4              ; reverb time
     kHDif        init      0.5            ; 'high frequency diffusion' (0 - 1)
     aRvb         nreverb   aInSig, kTime, kHDif ; create reverb signal
-    outs         aRvb*iPan, aRvb*(1-iPan)               ; send audio to outputs
+    //outs         aRvb*iPan, aRvb*(1-iPan)               ; send audio to outputs
+    spatial_my_var(aRvb)
     chnclear  "ReverbSend"   ; clear the named channel
+endin
+
+instr compressor
+    kthresh = 0
+    kloknee = 60
+    khiknee = 80
+    kratio  = 4
+    katt    = 0.1
+    krel    = .5
+    ilook   = .02
+    //asig[0]  compress asig[0], asig[0], kthresh, kloknee, khiknee, kratio, katt, krel, ilook
+    gaSpatialOut poly 8, "compress", gaSpatialOut, kthresh, kloknee, khiknee, kratio, katt, krel, ilook
+    gaDumpOut poly 8, "compress", gaDumpOut, kthresh, kloknee, khiknee, kratio, katt, krel, ilook
+    gaSpatialOut = 5 * gaSpatialOut
 endin
 
 instr limiter
@@ -505,6 +567,8 @@ instr limiter
 endin
 
 instr master_out
+
+
     outch \ 
         giOutChn_1, gaSpatialOut[0], \ 
         giOutChn_2, gaSpatialOut[1], \
@@ -537,6 +601,11 @@ instr dump_file
     gaDumpOut[6] = 0
     gaDumpOut[7] = 0
 endin
+
+
+//===========================================================================
+//====================      ALGO SCORE   =====================================
+//===========================================================================
 
 
 instr part
@@ -588,11 +657,6 @@ instr part
 endin 
 
 
-
-
-//===========================================================================
-//====================      ALGO SCORE   =====================================
-//===========================================================================
 
 /*
 == Transpose == !!!!
@@ -698,7 +762,7 @@ instr part_sample
     */    
   
     if kFlag==1 then
-        kTempo = 1.1 - kForm
+        kTempo = .95 - kForm
         
         if kForm < .3 then
             kPortam = .5
@@ -725,7 +789,7 @@ instr part_sample
     endif
     
     kAmp = rspline(0.01, 0.95, .1, 2)
-    kRevLev = 1. - kAmp
+    kRevLev = 1.0 - kAmp
     
     kRevLevSample = rspline(0.01, 0.55, .1, 2)
     
@@ -959,6 +1023,7 @@ i "SubstrPoly" 6 . .2 220
 i "score" 0 -1
 i "fft_global" 0 -1
 i "rever" 0 -1
+i "compressor" 0 -1
 i "limiter" 0 -1
 //i "dump_file" 0 -1
 i "master_out" 0 -1
